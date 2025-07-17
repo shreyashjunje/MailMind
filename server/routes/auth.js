@@ -19,8 +19,20 @@ let userTokens = null;
 //   });
 //   res.redirect(url);
 // });
-router.get("/google", passport.authenticate("google", { scope: ["profile", "email"] }));
 
+// update scope:
+router.get(
+  "/google",
+  passport.authenticate("google", {
+    scope: [
+      "profile",
+      "email",
+      "https://www.googleapis.com/auth/gmail.readonly",
+    ],
+    accessType: "offline",
+    prompt: "consent",
+  })
+);
 
 // Step 2: Google redirects back here
 // router.get("/google/callback", async (req, res) => {
@@ -61,23 +73,34 @@ router.get(
   "/google/callback",
   passport.authenticate("google", {
     failureRedirect: "http://localhost:5173/login",
-    session: false, // If you’re not using session-based login
+    // successRedirect: "http://localhost:5173/callback",
+
+    // session: false,
   }),
   (req, res) => {
+    // console.log("User authenticated:", req.user);
     const user = req.user;
+    // console.log("User tokens:", user.tokens);
 
     if (!user) {
       return res.redirect("http://localhost:5173/login?error=No%20User");
     }
 
-    // 👇 Extract required data
     const name = user.displayName;
     const email = user.emails?.[0]?.value;
     const picture = user.photos?.[0]?.value;
+    const token = user.accessToken;
 
-    // 👉 Send data to frontend (you can use JWT or query params)
+    console.log("token->", token);
+   
+
+    // You might want to send token to frontend too (for fetching Gmail data)
     res.redirect(
-      `http://localhost:5173/auth/callback?name=${encodeURIComponent(name)}&email=${encodeURIComponent(email)}&picture=${encodeURIComponent(picture)}`
+      `http://localhost:5173/auth/callback?name=${encodeURIComponent(
+        name
+      )}&email=${encodeURIComponent(email)}&picture=${encodeURIComponent(
+        picture
+      )}&token=${encodeURIComponent(token)}`
     );
   }
 );
@@ -181,7 +204,5 @@ router.get("/emails", async (req, res) => {
     res.status(500).json({ error: "Failed to fetch emails" });
   }
 });
-
-
 
 module.exports = router;
