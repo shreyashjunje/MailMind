@@ -19,6 +19,7 @@ const emailRoutes = require('./routes/email');
 
 const app = express();
 connectDB();
+// app.use("/api", router); // full URL becomes /api/attachments
 
 
 // ✅ Middleware

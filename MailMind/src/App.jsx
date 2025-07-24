@@ -8,6 +8,7 @@ import Login from "./pages/Login";
 import { AuthProvider } from "./context/AuthContext";
 import DashboardLayout from "./layouts/DashboardLayout";
 import CalendarPage from "./pages/Calender";
+import EmailList from "./pages/EmailList";
 
 function App() {
   return (
@@ -22,6 +23,9 @@ function App() {
           <Route path="/dashboard" element={<DashboardLayout />}>
             <Route index element={<Dashboard />} />
             <Route path="calendar" element={<CalendarPage />} />
+            <Route path="attachments" element={<EmailList />} />
+
+
 
             {/* <Route path="emails" element={<Emails />} /> */}
             {/* <Route path="attachments" element={<Attachments />} /> */}

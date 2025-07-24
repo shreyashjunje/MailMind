@@ -1,100 +1,249 @@
-const express = require("express");
+const router = require("express").Router();
 const { google } = require("googleapis");
-const isAuthenticated = require("../middlewares/isAuthenticated");
-const { summarizeEmail } = require("../utils/openai");
 const EmailSummary = require("../models/EmailSummary");
+const { summarizeEmail } = require("../utils/openai");
+const isAuthenticated = require("../middlewares/isAuthenticated");
+const quotedPrintable = require("quoted-printable");
+const fetchEmailsFromLast30Days = require("../utils/fetchEmails");
 
-const router = express.Router();
+
+// Extract both plain text and HTML content from email
+// const extractContent = (payload) => {
+//   let plainText = "";
+//   let htmlContent = "";
+
+//   const processParts = (part) => {
+//     if (!part) return;
+
+//     if (part.mimeType === "text/plain" && part.body?.data) {
+//       plainText += Buffer.from(part.body.data, "base64").toString("utf-8");
+//     } else if (part.mimeType === "text/html" && part.body?.data) {
+//       htmlContent += Buffer.from(part.body.data, "base64").toString("utf-8");
+//     }
+
+//     if (part.parts && Array.isArray(part.parts)) {
+//       part.parts.forEach(processParts);
+//     }
+//   };
+
+//   processParts(payload);
+//   return { plainText, htmlContent };
+// };
+const extractContent = (payload) => {
+  let plainText = "";
+  let htmlContent = "";
+
+  const processPart = (part) => {
+    if (!part) return;
+
+    const mimeType = part.mimeType;
+    const body = part.body || {};
+    let data = body.data;
+
+    if (data) {
+      // Decode Base64 first
+      data = Buffer.from(data, "base64").toString("utf-8");
+
+      // If it looks like quoted-printable, decode it
+      if (
+        data.includes("=3D") ||
+        data.includes("=C2") ||
+        data.includes("=E2")
+      ) {
+        data = quotedPrintable.decode(data);
+      }
+    }
+
+    if (mimeType === "text/plain") {
+      plainText += data || "";
+    } else if (mimeType === "text/html") {
+      htmlContent += data || "";
+    }
+
+    if (part.parts) {
+      part.parts.forEach(processPart);
+    }
+  };
+
+  processPart(payload);
+
+  return { plainText: plainText.trim(), htmlContent: htmlContent.trim() };
+};
+
+// Convert HTML to clean text
+const htmlToText = (html) => {
+  return html
+    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
+    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "")
+    .replace(/<[^>]+>/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+};
+
+// Return searchable text
+const getSearchableText = ({ plainText, htmlContent }) => {
+  if (plainText) return plainText.toLowerCase();
+  if (htmlContent) return htmlToText(htmlContent).toLowerCase();
+  return "";
+};
+
+// Keywords to detect important emails
+const IMPORTANT_KEYWORDS = [
+  "assignment",
+  "deadline",
+  "meeting",
+  "exam",
+  "interview",
+  "project",
+  "submission",
+  "call",
+  "netflix",
+  "airtel",
+  "invited",
+  "password",
+  "task",
+  "job",
+  "pw",
+  "reset",
+  "mba",
+  "OTP",
+];
+
+// Check for important keywords
+const isImportantEmail = (text) =>
+  IMPORTANT_KEYWORDS.some((keyword) => text.includes(keyword.toLowerCase()));
+
+// Extract basic headers
+const extractHeaders = (headers) => {
+  const get = (name) =>
+    headers.find((h) => h.name === name)?.value || `No ${name}`;
+  return {
+    subject: get("Subject"),
+    from: get("From"),
+    date: get("Date"),
+  };
+};
 
 router.get("/emails", isAuthenticated, async (req, res) => {
   try {
-    const accessToken = req.user.accessToken;
+    // console.log("🔐 Authenticated user:", req.user);
 
     const auth = new google.auth.OAuth2();
-    auth.setCredentials({ access_token: accessToken });
+    auth.setCredentials({ access_token: req.user.accessToken });
 
     const gmail = google.gmail({ version: "v1", auth });
 
-    // 📅 Filter emails from last 30 days
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    const formattedDate = thirtyDaysAgo.toISOString().split("T")[0];
+    const date = new Date();
+    date.setDate(date.getDate() - 30);
+    const afterDate = date.toISOString().split("T")[0];
 
-    const response = await gmail.users.messages.list({
+    // console.log("📅 Fetching emails after:", afterDate);
+
+    const { data } = await gmail.users.messages.list({
       userId: "me",
-      maxResults: 30,
-      q: `is:important after:${formattedDate}`,
+      maxResults: 10, // reduce for testing
+      q: `after:${afterDate}`,
     });
 
-    const messages = response.data.messages || [];
-    const emailData = [];
+    const messages = data.messages || [];
+    // console.log(`📨 Total messages fetched: ${messages.length}`);
 
-    const getEmailBody = (payload) => {
-      if (!payload) return "";
-      const parts = payload.parts || [payload];
-      const part = parts.find(
-        (p) => p.mimeType === "text/plain" || p.mimeType === "text/html"
-      );
-      const data = part?.body?.data || "";
-      return Buffer.from(data, "base64").toString("utf-8");
-    };
+    const result = [];
 
-    const importantKeywords = [
-      "assignment",
-      "deadline",
-      "meeting",
-      "exam",
-      "interview",
-      "project",
-      "submission",
-      "call",
-      "task",
-    ];
+    for (const msg of messages) {
+      // console.log("🔍 Checking email:", msg.id);
 
-    for (let msg of messages) {
       const exists = await EmailSummary.findOne({ emailId: msg.id });
       if (exists) {
-        emailData.push(exists);
+        // console.log("✅ Already summarized:", msg.id);
+        result.push(exists);
         continue;
       }
 
-      const detail = await gmail.users.messages.get({
+      const { data: fullMsg } = await gmail.users.messages.get({
         userId: "me",
         id: msg.id,
       });
 
-      const payload = detail.data.payload;
-      const body = getEmailBody(payload).toLowerCase();
+      const payload = fullMsg.payload || {};
+      const headers = extractHeaders(payload.headers || []);
+      const content = extractContent(payload);
+      const searchable = getSearchableText(content);
 
-      // ⛔️ Skip emails with no important keywords
-      const isRelevant = importantKeywords.some((keyword) =>
-        body.includes(keyword)
+      if (!searchable) {
+        // console.log("⚠️ No searchable content found, skipping:", msg.id);
+        continue;
+      }
+
+      if (!isImportantEmail(searchable)) {
+        // console.log("⏭️ Not important:", headers.subject);
+        continue;
+      }
+
+      // console.log("🧠 Summarizing important email:", headers.subject);
+
+      let summaryRes;
+      try {
+        summaryRes = await summarizeEmail(searchable);
+      } catch (err) {
+        console.error("❌ summarizeEmail failed:", err.message);
+        continue;
+      }
+
+      // const summaryDoc = new EmailSummary({
+      //   emailId: msg.id,
+      //   subject: headers.subject,
+      //   from: headers.from,
+      //   date: headers.date,
+      //   summary: summaryRes.summary || searchable.slice(0, 300),
+      //   links: summaryRes.links || [],
+      //   dates: summaryRes.dates || [],
+      //   action: summaryRes.action || "",
+      //   rawHtml: content.htmlContent,
+      // });
+
+      // await summaryDoc.save();
+      // result.push(summaryDoc);
+      await EmailSummary.updateOne(
+        { emailId: msg.id },
+        {
+          $setOnInsert: {
+            subject: headers.subject,
+            from: headers.from,
+            date: headers.date,
+            summary: summaryRes.summary || searchable.slice(0, 300),
+            links: summaryRes.links || [],
+            dates: summaryRes.dates || [],
+            action: summaryRes.action || "",
+            rawHtml: content.htmlContent,
+          },
+        },
+        { upsert: true }
       );
-      if (!isRelevant) continue;
 
-      const summaryData = await summarizeEmail(body);
-
-      const subjectHeader = payload.headers.find((h) => h.name === "Subject");
-      const fromHeader = payload.headers.find((h) => h.name === "From");
-
-      const summaryObj = new EmailSummary({
-        emailId: msg.id,
-        subject: subjectHeader?.value || "No Subject",
-        from: fromHeader?.value || "Unknown",
-        summary: summaryData.summary || body.slice(0, 200),
-        links: summaryData.links || [],
-        dates: summaryData.dates || [],
-        action: summaryData.action || "",
-      });
-
-      await summaryObj.save();
-      emailData.push(summaryObj);
+      const saved = await EmailSummary.findOne({ emailId: msg.id });
+      result.push(saved);
+      // console.log("✅ Email saved:", msg.id);
     }
 
-    res.json(emailData);
+    res.json(result);
   } catch (error) {
-    console.error("Email fetch error:", error.message);
-    res.status(500).json({ error: "Failed to fetch emails" });
+    // console.error("❌ API Error:", error);
+    res.status(500).json({
+      error: "Internal Server Error",
+      message: error.message,
+    });
+  }
+});
+
+router.get("/attachments", isAuthenticated, async (req, res) => {
+  try {
+    const auth = req.user.authClient; // or however you're storing the OAuth client
+    const emails = await fetchEmailsFromLast30Days(auth);
+    res.status(200).json({ success: true, emails });
+  } catch (error) {
+    console.error("Error fetching emails:", error);
+    res.status(500).json({ success: false, message: "Failed to fetch emails." });
   }
 });
 

@@ -18,7 +18,7 @@ const Sidebar = () => {
     { label: "Calendar", icon: <Calendar />, path: "/dashboard/calendar" },
 
     { label: "Important Emails", icon: <Mail />, path: "/emails" },
-    { label: "Attachments", icon: <Paperclip />, path: "/attachments" },
+    { label: "Attachments", icon: <Paperclip />, path: "/dashboard/attachments" },
     { label: "Reminders", icon: <Calendar />, path: "/reminders" },
     { label: "AI Assistant", icon: <Bot />, path: "/assistant" },
     { label: "Settings", icon: <Settings />, path: "/settings" },
@@ -26,7 +26,7 @@ const Sidebar = () => {
   ];
 
   return (
-    <div className="hidden lg:block w-64 min-h-screen  bg-white border-r shadow-md p-4 space-y-4">
+    <div className="hidden  lg:block w-64 min-h-screen  bg-white border-r shadow-md p-4 space-y-4">
       {/* <div className="text-2xl font-bold text-blue-600 mb-6">📬 MailMind</div> */}
 
       <ul className="space-y-2">

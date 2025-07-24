@@ -23,6 +23,7 @@ import {
   FileText,
   Send,
 } from "lucide-react";
+import axios from "axios";
 
 const Dashboard = () => {
   const [emails, setEmails] = useState([]);
@@ -34,28 +35,11 @@ const Dashboard = () => {
   const [showModal, setShowModal] = useState(false);
   const [showReminderModal, setShowReminderModal] = useState(false);
   const [reminderEmail, setReminderEmail] = useState(null);
-
+  const [loading, setLoading] = useState(true);
   const [reminderTime, setReminderTime] = useState("");
   const [reminderDate, setReminderDate] = useState("");
   const [reminderNote, setReminderNote] = useState("");
   const [selectedPlatform, setSelectedPlatform] = useState("");
-
-  // const handleSendReminder = (platform) => {
-  //   if (!reminderDate || !reminderTime) {
-  //     alert("Please select both date and time for the reminder");
-  //     return;
-  //   }
-  //   console.log(
-  //     `Sending reminder via ${platform} on ${reminderDate} at ${reminderTime}`
-  //   );
-  //   console.log("Note:", reminderNote);
-  //   setShowReminderModal(false);
-  //   // Reset form
-  //   setReminderTime("");
-  //   setReminderDate("");
-  //   setReminderNote("");
-  //   setSelectedPlatform("");
-  // };
 
   const getTomorrowDate = () => {
     const tomorrow = new Date();
@@ -83,53 +67,28 @@ const Dashboard = () => {
       color: "bg-purple-500 hover:bg-purple-600",
     },
   ];
-
   useEffect(() => {
-    // Mock data for demonstration - replace with your actual API call
-    const mockEmails = [
-      {
-        subject: "Project Meeting Tomorrow",
-        from: "john.doe@company.com",
-        summary:
-          "Hi team, we have a project meeting tomorrow at 2 PM. Please join us at https://zoom.us/j/123456789. We'll discuss the quarterly results and upcoming deadlines.",
-        originalMessage:
-          "Hi team,\n\nI hope this email finds you well. I wanted to reach out to schedule our upcoming project meeting for tomorrow, July 18th at 2:00 PM EST.\n\nAgenda:\n1. Review quarterly results\n2. Discuss upcoming deadlines\n3. Project timeline updates\n4. Resource allocation\n\nPlease join us at: https://zoom.us/j/123456789\nMeeting ID: 123 456 789\nPasscode: project2025\n\nIf you have any questions or agenda items to add, please let me know by end of day today.\n\nBest regards,\nJohn Doe\nProject Manager\nCompany Inc.\nPhone: (555) 123-4567",
-        dates: ["2025-07-18"],
-        tags: ["high", "meeting"],
-        receivedDate: "2025-07-17T10:30:00Z",
-        links: ["https://zoom.us/j/123456789"],
-      },
-      {
-        subject: "Invoice Due - Payment Required",
-        from: "billing@vendor.com",
-        summary:
-          "Your invoice #INV-2025-001 is due by July 20th, 2025. Please submit payment before the deadline to avoid late fees.",
-        originalMessage:
-          "Dear Valued Customer,\n\nThis is a friendly reminder that your invoice #INV-2025-001 is due for payment.\n\nInvoice Details:\n- Invoice Number: INV-2025-001\n- Amount Due: $2,450.00\n- Due Date: July 20th, 2025\n- Payment Terms: Net 30\n\nPlease submit payment before the deadline to avoid late fees of 2% per month.\n\nPayment Options:\n1. Online payment portal: https://vendor.com/invoice/INV-2025-001\n2. Bank transfer to Account #: 123456789\n3. Check payment to: Vendor Company, 123 Business St, City, State 12345\n\nIf you have any questions or need to discuss payment arrangements, please contact our billing department at billing@vendor.com or (555) 987-6543.\n\nThank you for your business!\n\nBest regards,\nBilling Department\nVendor Company",
-        dates: ["2025-07-20"],
-        tags: ["high", "payment"],
-        receivedDate: "2025-07-16T14:20:00Z",
-        links: ["https://vendor.com/invoice/INV-2025-001"],
-      },
-      {
-        subject: "Weekly Newsletter",
-        from: "newsletter@company.com",
-        summary:
-          "Check out this week's updates and announcements from our team.",
-        originalMessage:
-          "Weekly Newsletter - July 15, 2025\n\nHello Team,\n\nWelcome to this week's newsletter! Here are the latest updates and announcements:\n\n🎉 ACHIEVEMENTS\n- Our Q2 sales exceeded targets by 15%\n- Successfully launched the new mobile app\n- Welcomed 5 new team members\n\n📢 ANNOUNCEMENTS\n- Summer office hours start next week (flexible 7 AM - 6 PM)\n- Team building event scheduled for July 25th\n- New parking policies effective August 1st\n\n🔧 UPDATES\n- IT system maintenance scheduled for this weekend\n- Updated employee handbook available on intranet\n- New project management tool rollout begins Monday\n\n🎯 UPCOMING EVENTS\n- Monthly all-hands meeting: July 22nd at 10 AM\n- Quarterly review presentations: July 29-30th\n- Annual company picnic: August 15th\n\nFor more details, visit our company portal at https://company.com/newsletter\n\nHave a great week!\n\nCommunications Team\nCompany Inc.",
-        dates: [],
-        tags: ["low", "newsletter"],
-        receivedDate: "2025-07-15T09:00:00Z",
-        links: ["https://company.com/newsletter"],
-      },
-    ];
+    const fetchEmails = async () => {
+      try {
+        const response = await axios.get("http://localhost:5000/emails", {
+          withCredentials: true, // only if you're using cookies/session
+        });
+        setEmails(response.data);
+        console.log("Fetched emails:", response.data);
+      } catch (error) {
+        console.error("Failed to fetch emails:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
 
-    setEmails(mockEmails);
+    fetchEmails();
   }, []);
 
+  
   const filteredEmails = emails.filter(
     (email) =>
+      
       email.subject.toLowerCase().includes(searchQuery.toLowerCase()) ||
       email.summary?.toLowerCase().includes(searchQuery.toLowerCase())
   );
@@ -290,7 +249,7 @@ const Dashboard = () => {
   };
 
   return (
-    <div className="p-5 max-w-6xl mx-auto">
+    <div className="p-5 max-w-6xl mx-auto ">
       <div className="mb-6 sm:mb-8">
         <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">
           Email Dashboard
@@ -311,6 +270,8 @@ const Dashboard = () => {
           className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors text-sm sm:text-base"
         />
       </div>
+
+      {console.log("Filtered Emails:", filteredEmails)}
 
       {/* 📩 Email Cards */}
       {filteredEmails.length > 0 ? (

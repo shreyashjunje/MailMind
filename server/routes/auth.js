@@ -92,7 +92,6 @@ router.get(
     const token = user.accessToken;
 
     console.log("token->", token);
-   
 
     // You might want to send token to frontend too (for fetching Gmail data)
     res.redirect(
@@ -185,6 +184,9 @@ router.get("/emails", async (req, res) => {
         "submit",
         "form",
         "link",
+        "password",
+        "Airtel"
+       
       ];
 
       const isImportant = keywords.some(
