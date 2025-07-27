@@ -4,21 +4,11 @@ const router = express.Router();
 const { google } = require("googleapis");
 const oauth2Client = require("../config/googeConfig");
 const passport = require("passport");
+require("dotenv").config();
+const jwt = require("jsonwebtoken");
+
 let userTokens = null;
 
-// Step 1: Redirect to Google
-// router.get("/google", (req, res) => {
-//   const scopes = [
-//     "https://www.googleapis.com/auth/gmail.readonly",
-//     "profile",
-//     "email",
-//   ];
-//   const url = oauth2Client.generateAuthUrl({
-//     access_type: "offline",
-//     scope: scopes,
-//   });
-//   res.redirect(url);
-// });
 
 // update scope:
 router.get(
@@ -34,72 +24,44 @@ router.get(
   })
 );
 
-// Step 2: Google redirects back here
-// router.get("/google/callback", async (req, res) => {
-//   const code = req.query.code;
-//   const { tokens } = await oauth2Client.getToken(code);
-//   oauth2Client.setCredentials(tokens);
-
-//   // You can now fetch user profile or Gmail emails here
-//   res.redirect("http://localhost:5173/auth/callback");
-// });
-// router.get("/google/callback", async (req, res) => {
-//   const code = req.query.code;
-
-//   try {
-//     const { tokens } = await oauth2Client.getToken(code);
-//     oauth2Client.setCredentials(tokens);
-
-//     // Save tokens globally (for testing)
-//     userTokens = tokens;
-
-//     // Optional: log email
-//     const oauth2 = google.oauth2({ version: "v2", auth: oauth2Client });
-//     const userInfo = await oauth2.userinfo.get();
-//     console.log("Logged in as:", userInfo.data.email);
-
-//     // res.redirect("http://localhost:5173/dashboard");
-
-//     res.redirect(
-//       `http://localhost:5173/auth/callback?name=${user.name}&email=${user.email}&picture=${user.picture}`
-//     );
-//   } catch (err) {
-//     console.error("Login error:", err);
-//     res.status(500).send("Google login failed");
-//   }
-// });
-
+// Step 2: Handle Google callback
 router.get(
   "/google/callback",
   passport.authenticate("google", {
-    failureRedirect: "http://localhost:5173/login",
-    // successRedirect: "http://localhost:5173/callback",
-
-    // session: false,
+    failureRedirect: `${process.env.FRONTEND_URL}/login`,
+    session: false,
   }),
   (req, res) => {
-    // console.log("User authenticated:", req.user);
     const user = req.user;
-    // console.log("User tokens:", user.tokens);
-
     if (!user) {
-      return res.redirect("http://localhost:5173/login?error=No%20User");
+      return res.redirect(`${process.env.FRONTEND_URL}/login?error=true`);
     }
 
-    const name = user.displayName;
-    const email = user.emails?.[0]?.value;
-    const picture = user.photos?.[0]?.value;
-    const token = user.accessToken;
+    const { name, email, picture, accessToken } = user;
 
-    console.log("token->", token);
+     // 🔐 Create JWT with user info
+    const token = jwt.sign(
+      {
+        name,
+        email,
+        picture,
+        accessToken, // optional: you can store this too
+      },
+      process.env.JWT_SECRET,
+      { expiresIn: "8h" }
+    );
 
-    // You might want to send token to frontend too (for fetching Gmail data)
+    
+    // res.redirect(
+    //   `${process.env.FRONTEND_URL}/auth/callback?name=${encodeURIComponent(
+    //     name
+    //   )}&email=${encodeURIComponent(email)}&picture=${encodeURIComponent(
+    //     picture
+    //   )}&token=${encodeURIComponent(accessToken)}`
+    // );
+     // 👇 Redirect to frontend with token
     res.redirect(
-      `http://localhost:5173/auth/callback?name=${encodeURIComponent(
-        name
-      )}&email=${encodeURIComponent(email)}&picture=${encodeURIComponent(
-        picture
-      )}&token=${encodeURIComponent(token)}`
+      `${process.env.FRONTEND_URL}/auth/callback?token=${token}`
     );
   }
 );

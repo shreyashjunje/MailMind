@@ -1,14 +1,16 @@
-import { Bot, ChevronDown, Mail, Moon, RefreshCw, Sun, UserRoundX } from "lucide-react";
-import { useAuth } from "../context/AuthContext";
+import { Bot, ChevronDown, LogOut, Mail, Moon, RefreshCw, Sun, UserRoundX } from "lucide-react";
+// import { useAuth } from "../context/AuthContext";
 
 import React, { useState } from "react";
+import useAuth from "../hooks/useAuth";
 
 const Navbar = () => {
-  const { user } = useAuth();
+  const { user,logout } = useAuth();
   const [darkMode, setDarkMode] = useState(false);
 
   const handleDarkMode = () => {
     setDarkMode(!darkMode);
+    console.log(user.picture,"userrrr")
   };
 
   return (
@@ -47,8 +49,10 @@ const Navbar = () => {
                 <img
                   src={user.picture}
                   alt="Profile"
-                  className="w-8 h-8 rounded-full border border-gray-300"
+                  className="w-10 h-10 rounded-full border border-gray-300"
                 />
+                <LogOut onClick={logout}/>
+
               </div>
             )}
             {!user && (
@@ -57,6 +61,8 @@ const Navbar = () => {
                 <UserRoundX />
               </div>
             )}
+
+            
           </div>
         </div>
       </div>

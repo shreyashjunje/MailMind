@@ -9,9 +9,11 @@ import {
   LogOut,
 
 } from "lucide-react";
+import useAuth from "../hooks/useAuth";
 
 const Sidebar = () => {
   const location = useLocation();
+  const {logout} =useAuth
 
   const menu = [
     { label: "Dashboard", icon: <LayoutDashboard />, path: "/dashboard" },
@@ -22,7 +24,7 @@ const Sidebar = () => {
     { label: "Reminders", icon: <Calendar />, path: "/reminders" },
     { label: "AI Assistant", icon: <Bot />, path: "/assistant" },
     { label: "Settings", icon: <Settings />, path: "/settings" },
-    { label: "Logout", icon: <LogOut />, path: "/logout" },
+    // { label: "Logout", icon: <LogOut />, path: "/logout" },
   ];
 
   return (
@@ -47,6 +49,7 @@ const Sidebar = () => {
           </li>
         ))}
       </ul>
+      
     </div>
   );
 };

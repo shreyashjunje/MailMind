@@ -1,25 +1,41 @@
 import React, { useState } from "react";
 import { Mail, AlertCircle, CheckCircle } from "lucide-react";
-import { useAuth } from "../context/AuthContext";
-
+// import { useAuth } from "../context/AuthContext";
+import { useEffect } from "react";
+import { useNavigate } from "react-router";
 
 const Login = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(false);
-  const { setUser } = useAuth();
   
-  const handleGoogleLogin = () => {
-    console.log("Login button clicked");
-    // console.log("Redirecting to: ", url);
-    setLoading(true);
-    setError(null);
-    setSuccess(false);
+  const navigate = useNavigate();
 
-    setTimeout(() => {
-      window.location.href = "http://localhost:5000/auth/google";
-    }, 1000);
+  const handleGoogleLogin = () => {
+    setLoading(true);
+    console.log("hiiiiiiiiiiii")
+
+    // Check if token exists
+    const token = localStorage.getItem("token");
+    console.log("BACKEND_URL:", import.meta.env.VITE_BACKEND_URL);
+
+
+    if (token) {
+      console.log("🔐 Token found in localStorage. Navigating to dashboard...");
+      navigate("/dashboard");
+    } else {
+      console.log("🔐 No token found. Redirecting to Google login...");
+      window.location.href = `${import.meta.env.VITE_BACKEND_URL}/auth/google`;
+    }
   };
+
+  useEffect(() => {
+    // Optional: auto-login if already logged in
+    const token = localStorage.getItem("token");
+    if (token) {
+      navigate("/dashboard");
+    }
+  }, []);
 
   return (
     <div className="min-h-screen md:bg-gradient-to-br from-blue-50 via-white to-purple-50 flex items-center justify-center md:p-4">
