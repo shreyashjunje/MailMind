@@ -3,22 +3,24 @@ const cors = require("cors");
 const passport = require("passport");
 const session = require("express-session");
 const connectDB = require("./config/db");
-const cron = require("node-cron");
-const fetchEmailsJob = require("./jobs/fetchEmailsJob"); // You’ll create this function
+
+// const cron = require("node-cron");
+// const startCron = require("./jobs/cronRunner");
+
+// const fetchEmailsJob = require("./jobs/fetchEmailsJob"); // You’ll create this function
 
 require("dotenv").config();
 require("./config/passport"); // ✅ Your passport setup
 
-cron.schedule("0 * * * *", async () => {
-  console.log("⏰ Running email fetch job every hour...");
-  await fetchEmailsJob();
-});
-
 const authRoutes = require('./routes/auth'); // ✅ AFTER passport config
 const emailRoutes = require('./routes/email');
+const summaryRoutes = require("./routes/summary");
+
 
 const app = express();
 connectDB();
+// startCron();
+
 // app.use("/api", router); // full URL becomes /api/attachments
 
 
@@ -49,6 +51,10 @@ app.use(passport.session());
 // ✅ Routes
 app.use("/auth", authRoutes);
 app.use("/", emailRoutes);
+app.use("/api/summaries", summaryRoutes);
+app.use("/emails", summaryRoutes);
+
+
 
 // ✅ Root test route
 app.get("/", (req, res) => {

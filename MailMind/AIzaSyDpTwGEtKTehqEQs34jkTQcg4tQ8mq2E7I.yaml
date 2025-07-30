@@ -1,1 +1,33 @@
-AIzaSyDpTwGEtKTehqEQs34jkTQcg4tQ8mq2E7I
+curl -s -X POST \
+"https://generativelanguage.googleapis.com/v1/models/gemini-pro:generateContent?key=AIzaSyDpTwGEtKTehqEQs34jkTQcg4tQ8mq2E7I" \
+-H "Content-Type: application/json" \
+-d '{
+  "contents": [
+    {
+      "parts": [
+        {
+          "text": "Say hello in 3 languages"
+        }
+      ]
+    }
+  ]
+}'
+
+curl -s \
+"https://generativelanguage.googleapis.com/v1/models?key=AIzaSyDpTwGEtKTehqEQs34jkTQcg4tQ8mq2E7I"
+
+
+curl -s -X POST \
+"https://generativelanguage.googleapis.com/v1/models/gemini-2.5-pro:generateContent?key=AIzaSyDpTwGEtKTehqEQs34jkTQcg4tQ8mq2E7I" \
+-H "Content-Type: application/json" \
+-d '{
+  "contents": [
+    {
+      "parts": [
+        {
+          "text": "Say hello in 3 languages"
+        }
+      ]
+    }
+  ]
+}'

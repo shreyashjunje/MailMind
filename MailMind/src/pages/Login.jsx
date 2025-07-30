@@ -8,23 +8,18 @@ const Login = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(false);
-  
+
   const navigate = useNavigate();
 
   const handleGoogleLogin = () => {
     setLoading(true);
-    console.log("hiiiiiiiiiiii")
 
     // Check if token exists
     const token = localStorage.getItem("token");
-    console.log("BACKEND_URL:", import.meta.env.VITE_BACKEND_URL);
-
 
     if (token) {
-      console.log("🔐 Token found in localStorage. Navigating to dashboard...");
       navigate("/dashboard");
     } else {
-      console.log("🔐 No token found. Redirecting to Google login...");
       window.location.href = `${import.meta.env.VITE_BACKEND_URL}/auth/google`;
     }
   };
@@ -35,7 +30,7 @@ const Login = () => {
     if (token) {
       navigate("/dashboard");
     }
-  }, []);
+  }, [navigate]);
 
   return (
     <div className="min-h-screen md:bg-gradient-to-br from-blue-50 via-white to-purple-50 flex items-center justify-center md:p-4">

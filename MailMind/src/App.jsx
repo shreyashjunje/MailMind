@@ -9,6 +9,7 @@ import { AuthProvider } from "./context/AuthContext";
 import DashboardLayout from "./layouts/DashboardLayout";
 import CalendarPage from "./pages/Calender";
 import EmailList from "./pages/EmailList";
+import ErrorBoundary from "./components/ErrorBoundry";
 
 function App() {
   return (
@@ -20,12 +21,18 @@ function App() {
           {/* <Route path="/dashboard" element={<Dashboard />} /> */}
 
           {/* Protected Layout */}
+
           <Route path="/dashboard" element={<DashboardLayout />}>
-            <Route index element={<Dashboard />} />
+            <Route
+              index
+              element={
+                <ErrorBoundary>
+                  <Dashboard />
+                </ErrorBoundary>
+              }
+            />
             <Route path="calendar" element={<CalendarPage />} />
             <Route path="attachments" element={<EmailList />} />
-
-
 
             {/* <Route path="emails" element={<Emails />} /> */}
             {/* <Route path="attachments" element={<Attachments />} /> */}

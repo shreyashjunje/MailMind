@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import ReactMarkdown from "react-markdown";
+
 import {
   Search,
   Link2,
@@ -17,7 +19,6 @@ import {
   Eye,
   Mail,
   Bell,
-  MessageCircle,
   MessageSquare,
   Smartphone,
   FileText,
@@ -40,6 +41,11 @@ const Dashboard = () => {
   const [reminderDate, setReminderDate] = useState("");
   const [reminderNote, setReminderNote] = useState("");
   const [selectedPlatform, setSelectedPlatform] = useState("");
+  const [priorityFilter, setPriorityFilter] = useState("all");
+
+  const [showSenderPriorityModal, setShowSenderPriorityModal] = useState(false);
+  const [senderPriorityRules, setSenderPriorityRules] = useState([]);
+  const [newRule, setNewRule] = useState({ email: "", priority: "high" });
 
   const getTomorrowDate = () => {
     const tomorrow = new Date();
@@ -67,31 +73,204 @@ const Dashboard = () => {
       color: "bg-purple-500 hover:bg-purple-600",
     },
   ];
+
+  // const hideSender = async (sender) => {
+  //         const token = localStorage.getItem("token");
+
+  //   await fetch(`http://localhost:5000/emails/hide-sender`, {
+  //     method: "POST",
+  //     headers: {
+  //       "Content-Type": "application/json",
+  //       Authorization: `Bearer ${token}`,
+  //     },
+  //     body: JSON.stringify({ sender }),
+  //   });
+
+  //   // Optional: Refresh the email list
+  // };
+
+  // const determinePriority = (email) => {
+  //   if (!email) return "low";
+
+  //   const text = `${email.subject || ""} ${
+  //     email.summary || email.snippet || ""
+  //   }`.toLowerCase();
+
+  //   if (
+  //     text.includes("interview") ||
+  //     text.includes("offer") ||
+  //     text.includes("test") ||
+  //     text.includes("shortlisted") ||
+  //     text.includes("urgent") ||
+  //     text.includes("important") ||
+  //     text.includes("assignment") ||
+  //     text.includes("deadline") ||
+  //     text.includes("exam") ||
+  //     text.includes("action required") ||
+  //     text.includes("immediate attention") ||
+  //     text.includes("vodafone")
+  //   ) {
+  //     return "high";
+  //   } else if (
+  //     text.includes("reminder") ||
+  //     text.includes("meeting") ||
+  //     text.includes("schedule") ||
+  //     text.includes("follow up")
+  //   ) {
+  //     return "medium";
+  //   } else {
+  //     return "low";
+  //   }
+  // };
+  const hideSender = async (sender) => {
+    await axios.post("/api/hide-sender", { sender });
+
+    // Filter emails in frontend immediately
+    setEmails((prev) => prev.filter((email) => email.from !== sender));
+  };
   useEffect(() => {
-    const fetchEmails = async () => {
+    const savedRules = localStorage.getItem("senderPriorityRules");
+    if (savedRules) {
+      setSenderPriorityRules(JSON.parse(savedRules));
+    }
+  }, []);
+  useEffect(() => {
+    localStorage.setItem(
+      "senderPriorityRules",
+      JSON.stringify(senderPriorityRules)
+    );
+  }, [senderPriorityRules]);
+
+  useEffect(() => {
+    const fetchSummaries = async () => {
+      const token = localStorage.getItem("token");
+
       try {
-        const response = await axios.get("http://localhost:5000/emails", {
-          withCredentials: true, // only if you're using cookies/session
-        });
-        setEmails(response.data);
-        console.log("Fetched emails:", response.data);
+        const response = await axios.get(
+          "http://localhost:5000/emails/summaries",
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+
+        // Add priority to each email
+        const emailsWithPriority = response.data.summaries.map((email) => ({
+          ...email,
+          priority: determinePriority(email),
+        }));
+
+        setEmails(emailsWithPriority);
+
+        // setEmails(response.data.summaries);
       } catch (error) {
-        console.error("Failed to fetch emails:", error);
+        console.error("Error fetching summaries:", error);
       } finally {
         setLoading(false);
       }
     };
 
-    fetchEmails();
+    fetchSummaries();
   }, []);
 
-  
-  const filteredEmails = emails.filter(
-    (email) =>
-      
+  const determinePriority = (email) => {
+    if (!email) return "low";
+
+    // First check if sender has a custom priority rule
+    if (email.from) {
+      // Add this check
+      const senderRule = senderPriorityRules.find((rule) =>
+        email.from.toLowerCase().includes(rule.email.toLowerCase())
+      );
+      if (senderRule) return senderRule.priority;
+    }
+
+    // Then check the content-based rules
+    const text = `${email.subject || ""} ${
+      email.summary || email.snippet || ""
+    }`.toLowerCase();
+
+    if (
+      text.includes("interview") ||
+      text.includes("offer") ||
+      text.includes("test") ||
+      text.includes("shortlisted") ||
+      text.includes("urgent") ||
+      text.includes("important") ||
+      text.includes("assignment") ||
+      text.includes("deadline") ||
+      text.includes("exam") ||
+      text.includes("action required") ||
+      text.includes("immediate attention") ||
+      text.includes("vodafone")
+    ) {
+      return "high";
+    } else if (
+      text.includes("reminder") ||
+      text.includes("meeting") ||
+      text.includes("schedule") ||
+      text.includes("follow up")
+    ) {
+      return "medium";
+    } else {
+      return "low";
+    }
+  };
+
+  // Add new sender priority rule
+  const addSenderPriorityRule = () => {
+    if (newRule.email.trim() === "") return;
+    setSenderPriorityRules([...senderPriorityRules, newRule]);
+    setNewRule({ email: "", priority: "high" });
+  };
+
+  // Remove sender priority rule
+  const removeSenderPriorityRule = (index) => {
+    const updatedRules = [...senderPriorityRules];
+    updatedRules.splice(index, 1);
+    setSenderPriorityRules(updatedRules);
+  };
+
+  //   useEffect(() => {
+  //   const interval = setInterval(() => {
+  //     const fetchNewEmails = async () => {
+  //       const token = localStorage.getItem("token");
+  //       try {
+  //         await axios.get("http://localhost:5000/emails/check-new", {
+  //           headers: {
+  //             Authorization: `Bearer ${token}`,
+  //           },
+  //         });
+  //         console.log("✅ Checked for new emails");
+  //       } catch (err) {
+  //         console.error("🔁 Failed to check new emails", err);
+  //       }
+  //     };
+
+  //     fetchNewEmails();
+  //   }, 5 * 60 * 1000); // every 5 minutes
+
+  //   return () => clearInterval(interval);
+  // }, []);
+
+  // const filteredEmails = emails.filter(
+  //   (email) =>
+  //     email.subject.toLowerCase().includes(searchQuery.toLowerCase()) ||
+  //     email.summary?.toLowerCase().includes(searchQuery.toLowerCase())
+  // );
+
+  const filteredEmails = emails.filter((email) => {
+    const matchesSearch =
       email.subject.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      email.summary?.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+      (email.summary || "").toLowerCase().includes(searchQuery.toLowerCase());
+
+    const priority = determinePriority(email);
+    const matchesPriority =
+      priorityFilter === "all" || priority === priorityFilter;
+
+    return matchesSearch && matchesPriority;
+  });
 
   const handleTextToSpeech = (text) => {
     if ("speechSynthesis" in window) {
@@ -248,6 +427,8 @@ const Dashboard = () => {
     }
   };
 
+  const priority = determinePriority(emails);
+
   return (
     <div className="p-5 max-w-6xl mx-auto ">
       <div className="mb-6 sm:mb-8">
@@ -271,7 +452,27 @@ const Dashboard = () => {
         />
       </div>
 
-      {console.log("Filtered Emails:", filteredEmails)}
+      <div className="flex gap-3 mb-6">
+        {["all", "high", "medium", "low"].map((level) => (
+          <button
+            key={level}
+            onClick={() => setPriorityFilter(level)}
+            className={`px-4 py-2 rounded-lg text-sm font-medium border ${
+              priorityFilter === level
+                ? "bg-blue-600 text-white"
+                : "bg-white text-gray-600 border-gray-300"
+            }`}
+          >
+            {level.charAt(0).toUpperCase() + level.slice(1)}
+          </button>
+        ))}
+        <button
+          onClick={() => setShowSenderPriorityModal(true)}
+          className="px-4 py-2 rounded-lg text-sm font-medium border bg-white text-gray-600 border-gray-300 hover:bg-gray-50"
+        >
+          Manage Sender Priorities
+        </button>
+      </div>
 
       {/* 📩 Email Cards */}
       {filteredEmails.length > 0 ? (
@@ -295,12 +496,11 @@ const Dashboard = () => {
                     <h3 className="font-semibold text-lg text-gray-800 mb-2">
                       {email.subject}
                     </h3>
-
                     {/* From and Date */}
                     <div className="flex flex-wrap gap-4 text-sm text-gray-600 mb-2">
                       <div className="flex items-center">
                         <User className="w-4 h-4 mr-1" />
-                        <span>{email.from}</span>
+                        <span>{email.from || "Unknown sender"}</span>
                       </div>
                       <div className="flex items-center">
                         <Clock className="w-4 h-4 mr-1" />
@@ -309,23 +509,20 @@ const Dashboard = () => {
                         </span>
                       </div>
                     </div>
-
                     {/* Tags */}
-                    {email.tags && email.tags.length > 0 && (
-                      <div className="flex flex-wrap gap-2 mb-3">
-                        {email.tags.map((tag, tagIdx) => (
-                          <span
-                            key={tagIdx}
-                            className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getPriorityColor(
-                              tag
-                            )}`}
-                          >
-                            <Tag className="w-3 h-3 mr-1" />
-                            {tag}
-                          </span>
-                        ))}
-                      </div>
-                    )}
+                    {/* const priority = determinePriority(email) */}
+                    <div className="mb-3">
+                      <span
+                        className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getPriorityColor(
+                          determinePriority(email)
+                        )}`}
+                      >
+                        <Tag className="w-3 h-3 mr-1" />
+                        {determinePriority(email).charAt(0).toUpperCase() +
+                          determinePriority(email).slice(1)}{" "}
+                        Priority
+                      </span>
+                    </div>
                   </div>
 
                   {/* Action Buttons */}
@@ -375,12 +572,24 @@ const Dashboard = () => {
                       <Trash2 className="w-4 h-4" />
                     </button>
                   </div>
+
+                  <button
+                    className="text-sm"
+                    onClick={() => hideSender(email.from)}
+                  >
+                    Hide all from this sender
+                  </button>
                 </div>
 
                 {/* Summary */}
-                <p className="text-gray-700 text-sm mb-4 leading-relaxed">
+                {/* <p className="text-gray-700 text-sm mb-4 leading-relaxed">
                   {email.summary || email.snippet}
-                </p>
+                </p> */}
+                <div className="prose text-sm prose-sm text-gray-700 mb-4">
+                  <ReactMarkdown>
+                    {email.summary || email.snippet}
+                  </ReactMarkdown>
+                </div>
 
                 {/* Note Section */}
                 {editingNote === idx ? (
@@ -711,6 +920,110 @@ const Dashboard = () => {
                 <button
                   onClick={() => setShowModal(false)}
                   className="px-6 py-3 border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50 transition-colors"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Sender Priority Rules Modal */}
+      {showSenderPriorityModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between p-6 border-b border-gray-200">
+              <div className="flex items-center space-x-3">
+                <div className="bg-purple-100 p-2 rounded-lg">
+                  <Tag className="w-5 h-5 text-purple-600" />
+                </div>
+                <h2 className="text-xl font-semibold text-gray-800">
+                  Sender Priority Rules
+                </h2>
+              </div>
+              <button
+                onClick={() => setShowSenderPriorityModal(false)}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+
+            <div className="p-6">
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Add New Rule
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={newRule.email}
+                    onChange={(e) =>
+                      setNewRule({ ...newRule, email: e.target.value })
+                    }
+                    placeholder="Email or domain (e.g., 'hr@company.com' or '@important.com')"
+                    className="flex-1 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm"
+                  />
+                  <select
+                    value={newRule.priority}
+                    onChange={(e) =>
+                      setNewRule({ ...newRule, priority: e.target.value })
+                    }
+                    className="p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm"
+                  >
+                    <option value="high">High</option>
+                    <option value="medium">Medium</option>
+                    <option value="low">Low</option>
+                  </select>
+                  <button
+                    onClick={addSenderPriorityRule}
+                    className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm"
+                  >
+                    Add
+                  </button>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <h3 className="text-sm font-medium text-gray-700">
+                  Current Rules
+                </h3>
+                {senderPriorityRules.length === 0 ? (
+                  <p className="text-gray-500 text-sm">No rules defined yet</p>
+                ) : (
+                  <ul className="divide-y divide-gray-200">
+                    {senderPriorityRules.map((rule, index) => (
+                      <li
+                        key={index}
+                        className="py-3 flex justify-between items-center"
+                      >
+                        <div>
+                          <span className="font-medium">{rule.email}</span>
+                          <span
+                            className={`ml-2 px-2 py-1 rounded-full text-xs ${getPriorityColor(
+                              rule.priority
+                            )}`}
+                          >
+                            {rule.priority}
+                          </span>
+                        </div>
+                        <button
+                          onClick={() => removeSenderPriorityRule(index)}
+                          className="text-red-500 hover:text-red-700"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+
+              <div className="mt-6 flex justify-end">
+                <button
+                  onClick={() => setShowSenderPriorityModal(false)}
+                  className="px-6 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors text-sm"
                 >
                   Close
                 </button>
