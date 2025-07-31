@@ -4,7 +4,8 @@ const EmailSummary = require("../models/EmailSummary");
 const { summarizeWithGemini } = require("../utils/gemini");
 const { htmlToText } = require("html-to-text");
 
-const oauth2Client = require("../config/googeConfig");
+const createOAuthClient = require('../config/googeConfig');
+const oauth2Client = createOAuthClient();
 
 const fetchNewEmailsForUser = async (accessToken, userEmail) => {
   if (!accessToken || !userEmail) throw new Error("Missing accessToken/email");

@@ -7,12 +7,14 @@ const EmailSummarySchema = new mongoose.Schema({
   from: String,
   date: Date,
   body: String,
+  originalBody: String, // ✅ NEW FIELD: full raw body (HTML or plain text)
+
   summary: String,
   userEmail: String, // so we fetch summaries per user
   starred: {
-  type: Boolean,
-  default: false,
-}
+    type: Boolean,
+    default: false,
+  },
 });
 
 module.exports = mongoose.model("EmailSummary", EmailSummarySchema);

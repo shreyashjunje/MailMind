@@ -7,15 +7,17 @@ const { summarizeWithGemini } = require("../utils/gemini");
 const { google } = require("googleapis");
 const { htmlToText } = require("html-to-text");
 
-
-
-
 router.get("/check-new", verifyJWT, async (req, res) => {
   const { email: userEmail, accessToken } = req.user;
 
   try {
     const oauth2Client = new google.auth.OAuth2();
-    oauth2Client.setCredentials({ access_token: accessToken });
+    // oauth2Client.setCredentials({ access_token: accessToken });
+    oauth2Client.on("tokens", (tokens) => {
+      if (tokens.access_token) user.accessToken = tokens.access_token;
+      if (tokens.refresh_token) user.refreshToken = tokens.refresh_token;
+      user.save(); // persist rotated tokens
+    });
 
     const gmail = google.gmail({ version: "v1", auth: oauth2Client });
     const response = await gmail.users.messages.list({
@@ -26,8 +28,20 @@ router.get("/check-new", verifyJWT, async (req, res) => {
     const messages = response.data.messages || [];
 
     const keywords = [
-      "meeting", "exam", "deadline", "test", "assignment", "interview", "schedule",
-      "reminder", "event", "submit", "form", "link", "password", "Airtel"
+      "meeting",
+      "exam",
+      "deadline",
+      "test",
+      "assignment",
+      "interview",
+      "schedule",
+      "reminder",
+      "event",
+      "submit",
+      "form",
+      "link",
+      "password",
+      "Airtel",
     ];
 
     for (const msg of messages) {
@@ -40,9 +54,9 @@ router.get("/check-new", verifyJWT, async (req, res) => {
       });
 
       const headers = msgDetail.data.payload.headers;
-      const subject = headers.find(h => h.name === "Subject")?.value || "";
-      const from = headers.find(h => h.name === "From")?.value || "";
-      const dateStr = headers.find(h => h.name === "Date")?.value || "";
+      const subject = headers.find((h) => h.name === "Subject")?.value || "";
+      const from = headers.find((h) => h.name === "From")?.value || "";
+      const dateStr = headers.find((h) => h.name === "Date")?.value || "";
       const date = new Date(dateStr);
 
       const getText = (payload) => {
@@ -50,7 +64,9 @@ router.get("/check-new", verifyJWT, async (req, res) => {
           return Buffer.from(payload.body.data, "base64").toString("utf-8");
         }
         if (payload.mimeType === "text/html" && payload.body.data) {
-          const html = Buffer.from(payload.body.data, "base64").toString("utf-8");
+          const html = Buffer.from(payload.body.data, "base64").toString(
+            "utf-8"
+          );
           return htmlToText(html);
         }
         if (payload.parts) {
@@ -64,8 +80,9 @@ router.get("/check-new", verifyJWT, async (req, res) => {
 
       const body = getText(msgDetail.data.payload);
 
-      const isImportant = keywords.some(k =>
-        subject.toLowerCase().includes(k) || body.toLowerCase().includes(k)
+      const isImportant = keywords.some(
+        (k) =>
+          subject.toLowerCase().includes(k) || body.toLowerCase().includes(k)
       );
 
       if (!isImportant) continue;
@@ -89,8 +106,5 @@ router.get("/check-new", verifyJWT, async (req, res) => {
     res.status(500).json({ error: "Failed to check new emails" });
   }
 });
-
-
-
 
 module.exports = router;

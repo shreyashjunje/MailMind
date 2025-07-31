@@ -3,6 +3,7 @@ import { Mail, AlertCircle, CheckCircle } from "lucide-react";
 // import { useAuth } from "../context/AuthContext";
 import { useEffect } from "react";
 import { useNavigate } from "react-router";
+import { toast } from "react-toastify";
 
 const Login = () => {
   const [loading, setLoading] = useState(false);
@@ -12,13 +13,16 @@ const Login = () => {
   const navigate = useNavigate();
 
   const handleGoogleLogin = () => {
-    setLoading(true);
-
     // Check if token exists
     const token = localStorage.getItem("token");
 
     if (token) {
-      navigate("/dashboard");
+      console.log("inbackendcall....");
+      toast.success("Successfully logged in!");
+      setSuccess(true);
+      setTimeout(() => {
+        navigate("/dashboard");
+      }, 1000); // 1 second
     } else {
       window.location.href = `${import.meta.env.VITE_BACKEND_URL}/auth/google`;
     }
@@ -28,13 +32,22 @@ const Login = () => {
     // Optional: auto-login if already logged in
     const token = localStorage.getItem("token");
     if (token) {
-      navigate("/dashboard");
+      console.log("in use effect.......");
+      toast.success("Successfully logged in!");
+      setSuccess(true);
+      setTimeout(() => {
+        navigate("/dashboard");
+      }, 1000); // 1 second
+    }
+
+    if (error) {
+      toast.error(error);
     }
   }, [navigate]);
 
   return (
-    <div className="min-h-screen md:bg-gradient-to-br from-blue-50 via-white to-purple-50 flex items-center justify-center md:p-4">
-      <div className="w-full max-w-md  ">
+    <div className="min-h-screen  md:bg-gradient-to-br from-blue-50 via-white to-purple-50 flex items-center justify-center md:p-4">
+      <div className="w-full max-w-md ">
         {/* Main Login Card - All Content in One Box */}
         <div className="bg-white rounded-3xl md:shadow-2xl  md:border md:border-gray-100 p-5 md:p-10 backdrop-blur-sm text-center space-y-8 md:space-y-6">
           <div className="text-center space-y-8">

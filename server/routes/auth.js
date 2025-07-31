@@ -5,11 +5,13 @@ const EmailSummary = require("../models/EmailSummary");
 const { summarizeWithGemini } = require("../utils/gemini");
 const { htmlToText } = require("html-to-text");
 const { google } = require("googleapis");
-const oauth2Client = require("../config/googeConfig");
+const createOAuthClient = require("../config/googeConfig");
+const oauth2Client = createOAuthClient();
 const passport = require("passport");
 require("dotenv").config();
 const jwt = require("jsonwebtoken");
 const User = require("../models/User");
+const { extractInterviewEvent } = require("../utils/extractEvent");
 
 let userTokens = null;
 
@@ -21,6 +23,7 @@ router.get(
       "profile",
       "email",
       "https://www.googleapis.com/auth/gmail.readonly",
+      "https://www.googleapis.com/auth/calendar.events",
     ],
     accessType: "offline",
     prompt: "consent",
@@ -30,8 +33,24 @@ router.get(
 // ✅ Background email fetch + summary job
 const processEmailsInBackground = async (user) => {
   try {
-    const { email: userEmail, accessToken } = user;
-    oauth2Client.setCredentials({ access_token: accessToken });
+    const { email: userEmail, accessToken,refreshToken } = user;
+    // Create a fresh OAuth client instance and set credentials
+    const oauth2Client = createOAuthClient();
+    oauth2Client.setCredentials({
+      access_token: accessToken,
+      refresh_token: refreshToken,
+    });
+
+    // Handle token refresh events
+    oauth2Client.on("tokens", (tokens) => {
+      if (tokens.access_token) {
+        user.accessToken = tokens.access_token;
+      }
+      if (tokens.refresh_token) {
+        user.refreshToken = tokens.refresh_token;
+      }
+      user.save();
+    });
     const gmail = google.gmail({ version: "v1", auth: oauth2Client });
 
     const response = await gmail.users.messages.list({
@@ -101,7 +120,33 @@ const processEmailsInBackground = async (user) => {
         return "";
       };
 
+      const getRawBody = (payload) => {
+        if (payload.mimeType === "text/plain" && payload.body.data) {
+          return {
+            type: "text",
+            content: Buffer.from(payload.body.data, "base64").toString("utf-8"),
+          };
+        }
+
+        if (payload.mimeType === "text/html" && payload.body.data) {
+          return {
+            type: "html",
+            content: Buffer.from(payload.body.data, "base64").toString("utf-8"),
+          };
+        }
+
+        if (payload.parts) {
+          for (let part of payload.parts) {
+            const content = getRawBody(part);
+            if (content) return content;
+          }
+        }
+
+        return { type: "unknown", content: "" };
+      };
+
       const body = getText(msgDetail.data.payload);
+      const { content: originalBody } = getRawBody(msgDetail.data.payload);
 
       const isImportant = keywords.some(
         (k) =>
@@ -112,15 +157,93 @@ const processEmailsInBackground = async (user) => {
 
       const summary = await summarizeWithGemini(body);
 
-      await EmailSummary.create({
+      // After saving email summary:
+      const savedSummary = await EmailSummary.create({
         emailId: msgDetail.data.id,
         subject,
         from,
         date,
         body,
+        originalBody,
         summary,
         userEmail,
       });
+
+      // Extract candidate event
+      const candidate = extractInterviewEvent(savedSummary);
+      if (candidate) {
+        // Dedupe
+        let eventDoc = await Event.findOne({
+          sourceEmailId: candidate.sourceEmailId,
+          start: candidate.start,
+          userId: user.email,
+        });
+
+        if (!eventDoc) {
+          eventDoc = await Event.create({
+            ...candidate,
+            userId: user.email,
+          });
+        }
+
+        // Sync to Google Calendar if tokens exist
+        if (user.accessToken && user.refreshToken) {
+          try {
+            const oauth2Client = require("../config/googeConfig"); // ensure this returns a fresh OAuth2 client instance
+            // oauth2Client.setCredentials({
+            //   access_token: user.accessToken,
+            //   refresh_token: user.refreshToken,
+            // });
+            oauth2Client.on("tokens", (tokens) => {
+              if (tokens.access_token) user.accessToken = tokens.access_token;
+              if (tokens.refresh_token)
+                user.refreshToken = tokens.refresh_token;
+              user.save(); // persist rotated tokens
+            });
+
+            // Refresh tokens automatically if needed
+            oauth2Client.on("tokens", (tokens) => {
+              if (tokens.access_token) user.accessToken = tokens.access_token;
+              if (tokens.refresh_token)
+                user.refreshToken = tokens.refresh_token;
+              user.save(); // persist updates
+            });
+
+            const calendar = google.calendar({
+              version: "v3",
+              auth: oauth2Client,
+            });
+
+            if (!eventDoc.syncedToGoogle) {
+              const gEvent = {
+                summary: eventDoc.title,
+                description: eventDoc.description,
+                start: {
+                  dateTime: eventDoc.start.toISOString(),
+                  timeZone: "Asia/Kolkata",
+                },
+                end: {
+                  dateTime: eventDoc.end.toISOString(),
+                  timeZone: "Asia/Kolkata",
+                },
+              };
+
+              const response = await calendar.events.insert({
+                calendarId: "primary",
+                requestBody: gEvent,
+              });
+
+              eventDoc.googleEventId = response.data.id;
+              eventDoc.googleCalendarLink = response.data.htmlLink;
+              eventDoc.syncedToGoogle = true;
+              await eventDoc.save();
+            }
+          } catch (err) {
+            console.warn("Google Calendar sync failed:", err);
+            // optional: flag for retry later
+          }
+        }
+      }
     }
   } catch (err) {
     console.error("Email processing failed:", err);
@@ -142,8 +265,33 @@ router.get(
 
     const { name, email, picture, accessToken, refreshToken } = user;
 
-    // Save or update user
-    await User.findOneAndUpdate(
+    // // Save or update user
+    // await User.findOneAndUpdate(
+    //   { email },
+    //   {
+    //     name,
+    //     email,
+    //     picture,
+    //     accessToken,
+    //     refreshToken: refreshToken || "",
+    //   },
+    //   { upsert: true, new: true }
+    // );
+
+    // // Create token and redirect quickly
+    // const token = jwt.sign(
+    //   { name, email, picture, accessToken },
+    //   process.env.JWT_SECRET,
+    //   { expiresIn: "8h" }
+    // );
+
+    // res.redirect(`${process.env.FRONTEND_URL}/auth/callback?token=${token}`);
+
+    // // Fire background email processing after redirect
+    // processEmailsInBackground(user);
+
+    // Save or update user and get the fresh document (with tokens)
+    const savedUser = await User.findOneAndUpdate(
       { email },
       {
         name,
@@ -155,17 +303,17 @@ router.get(
       { upsert: true, new: true }
     );
 
-    // Create token and redirect quickly
+    // Create JWT and redirect
     const token = jwt.sign(
-      { name, email, picture, accessToken },
+      { name, email, picture, accessToken: savedUser.accessToken },
       process.env.JWT_SECRET,
       { expiresIn: "8h" }
     );
 
     res.redirect(`${process.env.FRONTEND_URL}/auth/callback?token=${token}`);
 
-    // Fire background email processing after redirect
-    processEmailsInBackground(user);
+    // Fire background email processing using the persisted user (has tokens)
+    processEmailsInBackground(savedUser);
   }
 );
 

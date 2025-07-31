@@ -2,6 +2,7 @@
 import { createContext, useState, useEffect } from "react";
 import {jwtDecode} from "jwt-decode";
 import { useNavigate } from "react-router";
+import { toast } from "react-toastify";
 
 export const AuthContext = createContext();
 
@@ -31,6 +32,7 @@ export const AuthProvider = ({ children }) => {
   const logout = () => {
     localStorage.removeItem("token");
     setUser(null);
+    toast.success("Logged out successfully!");
     navigate("/"); // Redirect to login page after logout
   };
 

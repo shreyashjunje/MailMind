@@ -1,15 +1,16 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Calendar, dateFnsLocalizer } from "react-big-calendar";
 import { format, parse, startOfWeek, getDay, addDays } from "date-fns";
 import enUS from "date-fns/locale/en-US";
-import { 
-  Plus, 
-  ChevronLeft, 
+import axios from "axios";
+import {
+  Plus,
+  ChevronLeft,
   ChevronRight,
   Clock,
   MapPin,
   Bell,
-  Filter
+  Filter,
 } from "lucide-react";
 import "react-big-calendar/lib/css/react-big-calendar.css";
 
@@ -25,103 +26,86 @@ const localizer = dateFnsLocalizer({
   locales,
 });
 
-// Enhanced dummy events
-const events = [
-  {
-    id: 1,
-    title: "Amazon Online Test",
-    start: new Date("2025-07-20T10:00:00"),
-    end: new Date("2025-07-20T12:00:00"),
-    type: "interview",
-    priority: "high",
-    location: "Online",
-    description: "Technical coding interview for SDE position"
-  },
-  {
-    id: 2,
-    title: "Netflix Password Reset",
-    start: new Date("2025-07-18T09:00:00"),
-    end: new Date("2025-07-18T09:30:00"),
-    type: "reminder",
-    priority: "medium",
-    location: "Personal",
-    description: "Monthly security update reminder"
-  },
-  {
-    id: 3,
-    title: "Project Meeting",
-    start: new Date("2025-07-19T14:00:00"),
-    end: new Date("2025-07-19T15:30:00"),
-    type: "meeting",
-    priority: "high",
-    location: "Conference Room A",
-    description: "Quarterly review and planning session"
-  },
-  {
-    id: 4,
-    title: "Doctor Appointment",
-    start: new Date("2025-07-21T11:00:00"),
-    end: new Date("2025-07-21T12:00:00"),
-    type: "appointment",
-    priority: "medium",
-    location: "City Hospital",
-    description: "Annual health checkup"
-  },
-  {
-    id: 5,
-    title: "Team Lunch",
-    start: new Date("2025-07-22T13:00:00"),
-    end: new Date("2025-07-22T14:00:00"),
-    type: "social",
-    priority: "low",
-    location: "Italian Restaurant",
-    description: "Monthly team bonding lunch"
-  }
-];
-
 const CalendarPage = () => {
-  const [view, setView] = useState('month');
+  const [view, setView] = useState("month");
   const [date, setDate] = useState(new Date());
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [showEventModal, setShowEventModal] = useState(false);
-  const [filterType, setFilterType] = useState('all');
+  const [filterType, setFilterType] = useState("all");
+
+  const [events, setEvents] = useState([]);
+  const [loadingEvents, setLoadingEvents] = useState(true);
+  const [fetchError, setFetchError] = useState(null);
 
   // Event type colors
   const eventTypeColors = {
-    interview: '#ef4444',
-    meeting: '#3b82f6',
-    reminder: '#f59e0b',
-    appointment: '#10b981',
-    social: '#8b5cf6'
+    interview: "#ef4444",
+    meeting: "#3b82f6",
+    reminder: "#f59e0b",
+    appointment: "#10b981",
+    social: "#8b5cf6",
   };
 
   const eventTypeIcons = {
-    interview: '💼',
-    meeting: '👥',
-    reminder: '⏰',
-    appointment: '🏥',
-    social: '🍽️'
+    interview: "💼",
+    meeting: "👥",
+    reminder: "⏰",
+    appointment: "🏥",
+    social: "🍽️",
   };
 
+  // Fetch events from backend
+  const fetchEvents = async () => {
+    setLoadingEvents(true);
+    setFetchError(null);
+    try {
+      const token = localStorage.getItem("token");
+      const res = await axios.get("/api/events", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const normalized = res.data.events.map((evt) => ({
+        ...evt,
+        start: new Date(evt.start),
+        end: new Date(evt.end),
+        type: evt.type || "meeting",
+        priority: evt.priority || "low",
+      }));
+      setEvents(normalized);
+    } catch (err) {
+      console.error("Failed to load events:", err);
+      setFetchError("Unable to load calendar events.");
+    } finally {
+      setLoadingEvents(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchEvents();
+    // optional: poll every minute
+    const interval = setInterval(fetchEvents, 60 * 1000);
+    return () => clearInterval(interval);
+  }, []);
+
   // Filter events based on type
-  const filteredEvents = filterType === 'all' 
-    ? events 
-    : events.filter(event => event.type === filterType);
+  const filteredEvents =
+    filterType === "all"
+      ? events
+      : events.filter((event) => event.type === filterType);
 
   // Event style getter
   const eventStyleGetter = (event) => {
     return {
       style: {
-        backgroundColor: eventTypeColors[event.type],
-        borderRadius: '4px',
+        backgroundColor: eventTypeColors[event.type] || "#666",
+        borderRadius: "4px",
         opacity: 0.9,
-        color: 'white',
-        border: '0',
-        display: 'block',
-        fontSize: '12px',
-        fontWeight: '500',
-        padding: '2px 4px'
-      }
+        color: "white",
+        border: "0",
+        display: "block",
+        fontSize: "12px",
+        fontWeight: "500",
+        padding: "2px 4px",
+      },
     };
   };
 
@@ -132,19 +116,38 @@ const CalendarPage = () => {
   };
 
   // Today's events
-  const todayEvents = events.filter(event => {
+  const todayEvents = events.filter((event) => {
     const eventDate = new Date(event.start);
     const today = new Date();
     return eventDate.toDateString() === today.toDateString();
   });
 
   // This week's events count
-  const thisWeekEvents = filteredEvents.filter(event => {
+  const thisWeekEvents = filteredEvents.filter((event) => {
     const eventDate = new Date(event.start);
     const weekStart = startOfWeek(new Date());
     const weekEnd = addDays(weekStart, 7);
     return eventDate >= weekStart && eventDate < weekEnd;
   });
+
+  // Retry sync to Google Calendar
+  const retrySyncGoogle = async (event) => {
+    if (!event || !event._id) return;
+    try {
+      const token = localStorage.getItem("token");
+      await axios.post(
+        `/api/events/${event._id}/sync-google`,
+        {},
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      await fetchEvents();
+      const updated = events.find((e) => e._id === event._id);
+      setSelectedEvent(updated || event);
+    } catch (e) {
+      console.error("Resync failed", e);
+      alert("Failed to resync to Google Calendar");
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gray-50 p-6">
@@ -159,27 +162,37 @@ const CalendarPage = () => {
                   <div className="flex items-center gap-4">
                     <div className="flex items-center gap-2">
                       <span className="text-2xl">📅</span>
-                      <h1 className="text-2xl font-bold text-gray-900">Calendar</h1>
+                      <h1 className="text-2xl font-bold text-gray-900">
+                        Calendar
+                      </h1>
                     </div>
                     <div className="flex items-center gap-2">
                       <button
-                        onClick={() => setDate(new Date(date.getFullYear(), date.getMonth() - 1))}
+                        onClick={() =>
+                          setDate(
+                            new Date(date.getFullYear(), date.getMonth() - 1)
+                          )
+                        }
                         className="p-2 hover:bg-gray-100 rounded-md transition-colors"
                       >
                         <ChevronLeft className="w-5 h-5 text-gray-600" />
                       </button>
                       <span className="text-lg font-semibold text-gray-700 min-w-[120px] text-center">
-                        {format(date, 'MMMM yyyy')}
+                        {format(date, "MMMM yyyy")}
                       </span>
                       <button
-                        onClick={() => setDate(new Date(date.getFullYear(), date.getMonth() + 1))}
+                        onClick={() =>
+                          setDate(
+                            new Date(date.getFullYear(), date.getMonth() + 1)
+                          )
+                        }
                         className="p-2 hover:bg-gray-100 rounded-md transition-colors"
                       >
                         <ChevronRight className="w-5 h-5 text-gray-600" />
                       </button>
                     </div>
                   </div>
-                  
+
                   <div className="flex items-center gap-3">
                     <div className="flex items-center gap-2">
                       <Filter className="w-4 h-4 text-gray-500" />
@@ -196,54 +209,57 @@ const CalendarPage = () => {
                         <option value="social">Social</option>
                       </select>
                     </div>
-                    
+
                     <div className="flex bg-gray-100 rounded-md p-1">
-                      {['month', 'week', 'day'].map((viewType) => (
+                      {["month", "week", "day"].map((viewType) => (
                         <button
                           key={viewType}
                           onClick={() => setView(viewType)}
                           className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
                             view === viewType
-                              ? 'bg-white text-blue-600 shadow-sm'
-                              : 'text-gray-600 hover:text-gray-800'
+                              ? "bg-white text-blue-600 shadow-sm"
+                              : "text-gray-600 hover:text-gray-800"
                           }`}
                         >
-                          {viewType.charAt(0).toUpperCase() + viewType.slice(1)}
+                          {viewType.charAt(0).toUpperCase() +
+                            viewType.slice(1)}
                         </button>
                       ))}
                     </div>
-                    
-                    {/* <button className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors">
-                      <Plus className="w-4 h-4" />
-                      New Event
-                    </button> */}
                   </div>
                 </div>
               </div>
 
               {/* Calendar */}
               <div className="p-6">
-                <div style={{ height: '600px' }}>
-                  <Calendar
-                    localizer={localizer}
-                    events={filteredEvents}
-                    startAccessor="start"
-                    endAccessor="end"
-                    view={view}
-                    onView={setView}
-                    date={date}
-                    onNavigate={setDate}
-                    onSelectEvent={handleSelectEvent}
-                    eventPropGetter={eventStyleGetter}
-                    components={{
-                      toolbar: () => null, // Hide default toolbar
-                    }}
-                    formats={{
-                      dateFormat: 'd',
-                      dayFormat: (date, culture, localizer) => localizer.format(date, 'dddd', culture),
-                    }}
-                  />
-                </div>
+                {loadingEvents ? (
+                  <div className="p-6">Loading calendar...</div>
+                ) : fetchError ? (
+                  <div className="p-6 text-red-500">{fetchError}</div>
+                ) : (
+                  <div style={{ height: "600px" }}>
+                    <Calendar
+                      localizer={localizer}
+                      events={filteredEvents}
+                      startAccessor="start"
+                      endAccessor="end"
+                      view={view}
+                      onView={setView}
+                      date={date}
+                      onNavigate={setDate}
+                      onSelectEvent={handleSelectEvent}
+                      eventPropGetter={eventStyleGetter}
+                      components={{
+                        toolbar: () => null, // Hide default toolbar
+                      }}
+                      formats={{
+                        dateFormat: "d",
+                        dayFormat: (date, culture, localizer) =>
+                          localizer.format(date, "dddd", culture),
+                      }}
+                    />
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -260,17 +276,21 @@ const CalendarPage = () => {
                 <div className="space-y-3">
                   {todayEvents.map((event) => (
                     <div
-                      key={event.id}
+                      key={event._id || event.id}
                       className="p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors cursor-pointer"
                       onClick={() => handleSelectEvent(event)}
                     >
                       <div className="flex items-start gap-3">
-                        <span className="text-lg">{eventTypeIcons[event.type]}</span>
+                        <span className="text-lg">
+                          {eventTypeIcons[event.type]}
+                        </span>
                         <div className="flex-1">
-                          <h4 className="font-medium text-gray-900 text-sm">{event.title}</h4>
+                          <h4 className="font-medium text-gray-900 text-sm">
+                            {event.title}
+                          </h4>
                           <p className="text-xs text-gray-600 flex items-center gap-1 mt-1">
                             <Clock className="w-3 h-3" />
-                            {format(event.start, 'h:mm a')}
+                            {format(event.start, "h:mm a")}
                           </p>
                         </div>
                       </div>
@@ -284,20 +304,30 @@ const CalendarPage = () => {
 
             {/* Quick Stats */}
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Quick Stats</h3>
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                Quick Stats
+              </h3>
               <div className="space-y-3">
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-gray-600">Total Events</span>
-                  <span className="font-semibold text-gray-900">{filteredEvents.length}</span>
+                  <span className="font-semibold text-gray-900">
+                    {filteredEvents.length}
+                  </span>
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-gray-600">This Week</span>
-                  <span className="font-semibold text-gray-900">{thisWeekEvents.length}</span>
+                  <span className="font-semibold text-gray-900">
+                    {thisWeekEvents.length}
+                  </span>
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-gray-600">High Priority</span>
                   <span className="font-semibold text-red-600">
-                    {filteredEvents.filter(event => event.priority === 'high').length}
+                    {
+                      filteredEvents.filter(
+                        (event) => event.priority === "high"
+                      ).length
+                    }
                   </span>
                 </div>
               </div>
@@ -305,11 +335,13 @@ const CalendarPage = () => {
 
             {/* Event Types Legend */}
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Event Types</h3>
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                Event Types
+              </h3>
               <div className="space-y-2">
                 {Object.entries(eventTypeColors).map(([type, color]) => (
                   <div key={type} className="flex items-center gap-3">
-                    <div 
+                    <div
                       className="w-4 h-4 rounded"
                       style={{ backgroundColor: color }}
                     ></div>
@@ -328,9 +360,41 @@ const CalendarPage = () => {
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
             <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
               <div className="flex justify-between items-start mb-4">
-                <div className="flex items-center gap-3">
-                  <span className="text-2xl">{eventTypeIcons[selectedEvent.type]}</span>
-                  <h3 className="text-xl font-semibold text-gray-900">{selectedEvent.title}</h3>
+                <div className="flex flex-col gap-2">
+                  <div className="flex items-center gap-3">
+                    <span className="text-2xl">
+                      {eventTypeIcons[selectedEvent.type]}
+                    </span>
+                    <h3 className="text-xl font-semibold text-gray-900">
+                      {selectedEvent.title}
+                    </h3>
+                  </div>
+                  {/* Sync status */}
+                  {selectedEvent.syncedToGoogle ? (
+                    <div className="text-sm text-green-600 flex items-center gap-2">
+                      ✅ Synced to Google Calendar.{" "}
+                      {selectedEvent.googleCalendarLink && (
+                        <a
+                          href={selectedEvent.googleCalendarLink}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="underline"
+                        >
+                          View
+                        </a>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="text-sm text-yellow-600 flex items-center gap-2">
+                      ⏳ Not yet synced.{" "}
+                      <button
+                        onClick={() => retrySyncGoogle(selectedEvent)}
+                        className="underline text-blue-600"
+                      >
+                        Retry
+                      </button>
+                    </div>
+                  )}
                 </div>
                 <button
                   onClick={() => setShowEventModal(false)}
@@ -339,36 +403,42 @@ const CalendarPage = () => {
                   ×
                 </button>
               </div>
-              
+
               <div className="space-y-3">
                 <div className="flex items-center gap-2 text-gray-600">
                   <Clock className="w-4 h-4" />
                   <span className="text-sm">
-                    {format(selectedEvent.start, 'MMM d, yyyy h:mm a')} - 
-                    {format(selectedEvent.end, 'h:mm a')}
+                    {format(selectedEvent.start, "MMM d, yyyy h:mm a")} -{" "}
+                    {format(selectedEvent.end, "h:mm a")}
                   </span>
                 </div>
-                
+
                 <div className="flex items-center gap-2 text-gray-600">
                   <MapPin className="w-4 h-4" />
                   <span className="text-sm">{selectedEvent.location}</span>
                 </div>
-                
+
                 <div className="flex items-center gap-2">
-                  <span className={`px-2 py-1 rounded text-xs font-medium ${
-                    selectedEvent.priority === 'high' ? 'bg-red-100 text-red-700' :
-                    selectedEvent.priority === 'medium' ? 'bg-yellow-100 text-yellow-700' :
-                    'bg-green-100 text-green-700'
-                  }`}>
-                    {selectedEvent.priority.toUpperCase()} PRIORITY
+                  <span
+                    className={`px-2 py-1 rounded text-xs font-medium ${
+                      selectedEvent.priority === "high"
+                        ? "bg-red-100 text-red-700"
+                        : selectedEvent.priority === "medium"
+                        ? "bg-yellow-100 text-yellow-700"
+                        : "bg-green-100 text-green-700"
+                    }`}
+                  >
+                    {selectedEvent.priority?.toUpperCase() || "LOW"} PRIORITY
                   </span>
                 </div>
-                
+
                 <div className="mt-4">
-                  <p className="text-sm text-gray-700">{selectedEvent.description}</p>
+                  <p className="text-sm text-gray-700">
+                    {selectedEvent.description}
+                  </p>
                 </div>
               </div>
-              
+
               <div className="flex gap-3 mt-6">
                 <button className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors">
                   Edit Event
