@@ -60,9 +60,17 @@ const CalendarPage = () => {
     setFetchError(null);
     try {
       const token = localStorage.getItem("token");
-      const res = await axios.get("/api/events", {
+      if (!token) {
+        setFetchError("You must be logged in to view events.");
+        console.error("No token found");
+        return;
+      }
+      const res = await axios.get("http://localhost:5000/api/events", {
         headers: { Authorization: `Bearer ${token}` },
+        "Content-Type": "application/json",
       });
+
+      console.log("Fetched events:", res.data);
       const normalized = res.data.events.map((evt) => ({
         ...evt,
         start: new Date(evt.start),
@@ -115,6 +123,8 @@ const CalendarPage = () => {
     setShowEventModal(true);
   };
 
+  console.log("Filtered events...............:", filteredEvents);
+
   // Today's events
   const todayEvents = events.filter((event) => {
     const eventDate = new Date(event.start);
@@ -134,18 +144,29 @@ const CalendarPage = () => {
   const retrySyncGoogle = async (event) => {
     if (!event || !event._id) return;
     try {
+      console.log("Resyncing event to Google Calendar:", event);
       const token = localStorage.getItem("token");
-      await axios.post(
-        `/api/events/${event._id}/sync-google`,
+      const response = await axios.post(
+        `http://localhost:5000/api/events/${event._id}/sync-google`,
         {},
-        { headers: { Authorization: `Bearer ${token}` } }
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+        }
       );
+      console.log("Sync response:", response.data);
       await fetchEvents();
       const updated = events.find((e) => e._id === event._id);
       setSelectedEvent(updated || event);
     } catch (e) {
-      console.error("Resync failed", e);
-      alert("Failed to resync to Google Calendar");
+      console.error("Resync failed", e.response?.data || e.message);
+      alert(
+        `Failed to resync to Google Calendar: ${
+          e.response?.data?.error || e.message
+        }`
+      );
     }
   };
 
@@ -221,8 +242,7 @@ const CalendarPage = () => {
                               : "text-gray-600 hover:text-gray-800"
                           }`}
                         >
-                          {viewType.charAt(0).toUpperCase() +
-                            viewType.slice(1)}
+                          {viewType.charAt(0).toUpperCase() + viewType.slice(1)}
                         </button>
                       ))}
                     </div>

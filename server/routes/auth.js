@@ -6,12 +6,13 @@ const { summarizeWithGemini } = require("../utils/gemini");
 const { htmlToText } = require("html-to-text");
 const { google } = require("googleapis");
 const createOAuthClient = require("../config/googeConfig");
-const oauth2Client = createOAuthClient();
 const passport = require("passport");
 require("dotenv").config();
 const jwt = require("jsonwebtoken");
 const User = require("../models/User");
 const { extractInterviewEvent } = require("../utils/extractEvent");
+const Event = require("../models/Event");
+
 
 let userTokens = null;
 
@@ -23,6 +24,7 @@ router.get(
       "profile",
       "email",
       "https://www.googleapis.com/auth/gmail.readonly",
+        "https://www.googleapis.com/auth/calendar",
       "https://www.googleapis.com/auth/calendar.events",
     ],
     accessType: "offline",
@@ -41,7 +43,7 @@ const processEmailsInBackground = async (user) => {
       refresh_token: refreshToken,
     });
 
-    // Handle token refresh events
+    // // Handle token refresh events
     oauth2Client.on("tokens", (tokens) => {
       if (tokens.access_token) {
         user.accessToken = tokens.access_token;
@@ -189,25 +191,27 @@ const processEmailsInBackground = async (user) => {
         // Sync to Google Calendar if tokens exist
         if (user.accessToken && user.refreshToken) {
           try {
-            const oauth2Client = require("../config/googeConfig"); // ensure this returns a fresh OAuth2 client instance
-            // oauth2Client.setCredentials({
-            //   access_token: user.accessToken,
-            //   refresh_token: user.refreshToken,
-            // });
-            oauth2Client.on("tokens", (tokens) => {
-              if (tokens.access_token) user.accessToken = tokens.access_token;
-              if (tokens.refresh_token)
-                user.refreshToken = tokens.refresh_token;
-              user.save(); // persist rotated tokens
-            });
+            // const oauth2Client = require("../config/googeConfig"); // ensure this returns a fresh OAuth2 client instance
+            const oauth2Client = createOAuthClient();
 
-            // Refresh tokens automatically if needed
-            oauth2Client.on("tokens", (tokens) => {
-              if (tokens.access_token) user.accessToken = tokens.access_token;
-              if (tokens.refresh_token)
-                user.refreshToken = tokens.refresh_token;
-              user.save(); // persist updates
+            oauth2Client.setCredentials({
+              access_token: user.accessToken,
+              refresh_token: user.refreshToken,
             });
+            // oauth2Client.on("tokens", (tokens) => {
+            //   if (tokens.access_token) user.accessToken = tokens.access_token;
+            //   if (tokens.refresh_token)
+            //     user.refreshToken = tokens.refresh_token;
+            //   user.save(); // persist rotated tokens
+            // });
+
+            // // Refresh tokens automatically if needed
+            // oauth2Client.on("tokens", (tokens) => {
+            //   if (tokens.access_token) user.accessToken = tokens.access_token;
+            //   if (tokens.refresh_token)
+            //     user.refreshToken = tokens.refresh_token;
+            //   user.save(); // persist updates
+            // });
 
             const calendar = google.calendar({
               version: "v3",
@@ -264,6 +268,7 @@ router.get(
     }
 
     const { name, email, picture, accessToken, refreshToken } = user;
+    console.log("User authenticated:", email);
 
     // // Save or update user
     // await User.findOneAndUpdate(
@@ -310,6 +315,8 @@ router.get(
       { expiresIn: "8h" }
     );
 
+    console.log("Redirecting with token---------->:", token.email);
+
     res.redirect(`${process.env.FRONTEND_URL}/auth/callback?token=${token}`);
 
     // Fire background email processing using the persisted user (has tokens)
@@ -332,6 +339,8 @@ router.get("/emails", async (req, res) => {
   }
 
   try {
+    const oauth2Client = createOAuthClient();
+
     oauth2Client.setCredentials(userTokens);
     const gmail = google.gmail({ version: "v1", auth: oauth2Client });
 

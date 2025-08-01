@@ -1,9 +1,9 @@
 import React, { useState } from "react";
 import { Mail, AlertCircle, CheckCircle } from "lucide-react";
-// import { useAuth } from "../context/AuthContext";
 import { useEffect } from "react";
 import { useNavigate } from "react-router";
 import { toast } from "react-toastify";
+import logo from "../assets/logo1.png"; // Adjust the path as necessary
 
 const Login = () => {
   const [loading, setLoading] = useState(false);
@@ -13,7 +13,6 @@ const Login = () => {
   const navigate = useNavigate();
 
   const handleGoogleLogin = () => {
-    // Check if token exists
     const token = localStorage.getItem("token");
 
     if (token) {
@@ -29,7 +28,6 @@ const Login = () => {
   };
 
   useEffect(() => {
-    // Optional: auto-login if already logged in
     const token = localStorage.getItem("token");
     if (token) {
       console.log("in use effect.......");
@@ -52,10 +50,8 @@ const Login = () => {
         <div className="bg-white rounded-3xl md:shadow-2xl  md:border md:border-gray-100 p-5 md:p-10 backdrop-blur-sm text-center space-y-8 md:space-y-6">
           <div className="text-center space-y-8">
             {/* Logo */}
-            <div className="flex items-center justify-center">
-              <div className="w-20 h-20 bg-gradient-to-br from-blue-600 to-blue-700 rounded-3xl flex items-center justify-center shadow-2xl shadow-blue-500/25">
-                <Mail className="w-10 h-10 text-white" />
-              </div>
+            <div className="flex items-center justify-center ml-6">
+              <img src={logo} alt="Description of image" width={160} />
             </div>
 
             {/* App Title & Description */}
@@ -112,14 +108,14 @@ const Login = () => {
             )}
 
             {/* Success Message */}
-            {success && (
+            {/* {success && (
               <div className="flex items-center gap-3 p-4 bg-green-50 rounded-xl border border-green-200 shadow-sm">
                 <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0" />
                 <p className="text-green-800 text-sm">
                   Successfully logged in! Redirecting...
                 </p>
               </div>
-            )}
+            )} */}
 
             {/* Login Button */}
             <button

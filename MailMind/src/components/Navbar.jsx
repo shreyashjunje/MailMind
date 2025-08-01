@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
+import logo from "../assets/logo1.png"; // Adjust the path as necessary
 
 import {
   Bot,
@@ -15,6 +16,7 @@ import {
   X,
 } from "lucide-react";
 import useAuth from "../hooks/useAuth";
+import AnimatedLogoImage from "./helpers/AnimatedLogo";
 
 const Navbar = () => {
   const { user, logout } = useAuth();
@@ -52,14 +54,19 @@ const Navbar = () => {
   }, [showProfileModal]);
 
   return (
-    <nav >
-      <div className=" bg-white p-4 border-2 rounded-lg flex items-center justify-between shadow-md relative">
+    <nav>
+      <div className=" bg-gray-50 p-3 border-2 rounded-lg flex items-center justify-between shadow-md relative">
         <div className="flex items-center gap-2">
-          <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-blue-700 rounded-3xl flex items-center justify-center shadow-2xl shadow-blue-500/25">
+          {/* <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-blue-700 rounded-3xl flex items-center justify-center shadow-2xl shadow-blue-500/25">
             <Mail className="w-5 h-5 text-white" />
+          </div> */}
+          <div className="flex items-center justify-center ">
+            {/* <img src={logo} alt="Description of image" width={60} /> */}
+            <AnimatedLogoImage/>
           </div>
-          <h1 className="text-xl lg:text-2xl font-bold text-gray-900">
+          <h1 className="logo1 text-xl lg:text-3xl mt-1 text-gray-900">
             MailMind
+
           </h1>
           <ChevronDown className="block md:hidden" />
         </div>
@@ -191,7 +198,10 @@ const Navbar = () => {
                           <Plus className="w-4 h-4" />
                           Add account
                         </button>
-                        <button onClick={logout} className="flex-1 text-white px-5 py-4  flex items-center justify-center gap-2 text-sm font-medium hover:bg-[#3c4043] transition-all duration-200 rounded-r-full">
+                        <button
+                          onClick={logout}
+                          className="flex-1 text-white px-5 py-4  flex items-center justify-center gap-2 text-sm font-medium hover:bg-[#3c4043] transition-all duration-200 rounded-r-full"
+                        >
                           <LogOut className="w-4 h-4" />
                           Sign out
                         </button>
